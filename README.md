@@ -19,6 +19,19 @@ UDPNet은 안개 이미지와 depth 지도를 함께 받아 안개를 걷어 내
 - **설정**: 세 모델 모두 같다. 300만 장(66 epoch), batch 6 × 누적 2, lr 1e-4, fp32
 - **지표**: gain = UDPNet 출력 PSNR − 안개 입력 PSNR (dB). 세 모델의 입력이 같아서 gain 차이가 곧 PSNR 차이다
 
+## test와 test_heldout
+
+| | test | test_heldout |
+|---|---|---|
+| 구성 | AerialMetric 공식 Oblique test 전체 | test 중 학습에 없는 장소 3곳 (Artsci, caliterra-output, polytech) |
+| 크기 | 770프레임 (3,080장) | 212프레임 (848장) |
+| 장소 | 20곳, 이 중 16곳은 학습에도 있음 | 3곳 모두 학습에 없음 |
+| 경사 시점 비율 (pitch < 70°) | 58% | 88% |
+| 보는 것 | 아는 장소의 처음 보는 프레임 | 처음 보는 장소로의 일반화 |
+
+test_heldout은 test의 일부다. 두 세트는 시점 구성도 다르다. 학습 데이터는 경사 시점이 25%라서 3배로 반복해 약 50%로
+맞췄다. 그래서 test_heldout에서 성능이 떨어지면 새 장소 때문인지 경사 시점 때문인지 함께 따져 봐야 한다.
+
 ## 결과
 
 | 모델 | test PSNR | test gain | test_heldout PSNR | test_heldout gain | val 최고 PSNR (epoch) |
