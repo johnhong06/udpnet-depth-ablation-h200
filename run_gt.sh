@@ -329,7 +329,8 @@ stage_check () {
   for d in /app/data /app/output /app/scratch "$WORK_ROOT" "$OUT_DIR"; do
     [[ -e $d ]] && echo "  $d: $(writable "$d" && echo writable || echo read-only), free $(freegb "$d") GB" | tee -a "$JOBLOG" || echo "  $d: missing"; done
   say "== data under $DATA_SRC"
-  find "$DATA_SRC" -maxdepth 4 \( -name "$PACK.tar.part_00" -o -name SHA256SUMS_parts -o -name "*.zip" -o -type d -name "$PACK" -o -name "*_last.ckpt" \) 2>/dev/null | head -20 | sed 's/^/  /' | tee -a "$JOBLOG" || true
+  # only this pack (the shared /app/data holds other users' archives too)
+  find "$DATA_SRC" -maxdepth 4 \( -name "$PACK.tar.part_00" -o -name "$PACK.zip" -o -type d -name "$PACK" -o -name "am_v2_lr1e-4_*_last.ckpt" \) 2>/dev/null | head -10 | sed 's/^/  /' | tee -a "$JOBLOG" || true
   local pd; pd=$(find "$DATA_SRC" -maxdepth 4 -name "$PACK.tar.part_*" -printf "%h\n" 2>/dev/null | sort -u | head -1 || true)
   if [[ -n $pd ]]; then   # upload progress: which parts are there (by name and size; the full SHA256 check runs in smoke/full)
     "$PYTHON" - "$pd" "$PACK" <<'EOF2' | tee -a "$JOBLOG"
