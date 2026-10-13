@@ -102,7 +102,7 @@ zip에는 결과 JSON(test, test_heldout), 학습·평가 로그, TensorBoard �
 | checkpoint 선택 | val split, 512 중앙 crop, 3 epoch마다 |
 | 평가 | test, test_heldout을 원본 해상도로 |
 
-학습률을 낮춘 이유는 README의 "Stability"에 적어 두었다.
+학습률을 낮춘 이유는 [details_en.md](details_en.md)의 "Stability"에 적어 두었다.
 
 ## 6. 시간 예상
 
