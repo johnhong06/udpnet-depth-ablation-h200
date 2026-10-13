@@ -22,6 +22,7 @@ depth prior ablation은 같은 UDPNet을 depth 입력만 바꿔 세 번 학습�
 | `README_ADMIN_DRIVE.txt` | 1 | 관리자용 안내 |
 
 - 압축은 풀지 않아도 된다. 스크립트가 체크섬을 확인한 뒤 `/app/scratch`에 푼다.
+- 업로드 중에도 `check`는 돌릴 수 있다. 몇 번 조각까지 올라왔는지 보여 준다. `smoke`·`full`은 조각이 다 오기 전에는 체크섬 검사에서 멈춘다.
 - `/app/data`가 읽기 전용이어도 되고 드라이브 폴더째 받아 zip으로 묶여 와도 된다.
 - `/app/data`와 `/app/output`은 공간을 같이 쓴다. 57 GB가 필요하다.
 
@@ -45,7 +46,7 @@ GPU 할당량 `1`(16 GB 조각)은 쓰지 않는다. 이 학습은 batch 6에서
 
 | 순서 | 코드 실행 명령어 | 걸리는 시간 | 끝나면 확인할 것 |
 |---|---|---|---|
-| 1 | `bash run_gt.sh check` | 1분 | 조각을 찾았는지, `/app/scratch` 여유 공간 57 GB 이상, GPU 메모리, CPU 코어 수 |
+| 1 | `bash run_gt.sh check` | 1분 | `data upload: COMPLETE`(조각 27/27)인지, `/app/scratch` 여유 공간 57 GB 이상, GPU 메모리, CPU 코어 수 |
 | 2 | `bash run_gt.sh smoke` | 15분 안팎 | 에러 없이 끝났는지, 마지막 줄 `[smoke] … ms/optimizer step -> … h` |
 | 3 | `bash run_gt.sh full` | 18~26시간 예상 | 30분마다 나오는 `[hb]` 줄, 마지막 결과 표 |
 | 4 | `bash run_gt.sh smoke const` | 15분 안팎 | 2번과 같음 |

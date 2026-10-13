@@ -145,8 +145,9 @@ stage_data () {
     fg=$(freegb "$WORK_ROOT"); [[ -z $fg || $fg -ge $need ]] || die "$WORK_ROOT has $fg GB free, unpacking needs $need GB"
     if [[ -n $pd ]]; then
       say "data: $(ls "$pd"/$PACK.tar.part_* | wc -l) tar parts in $pd -> verify + unpack into $WORK_ROOT"
-      if [[ -f $pd/SHA256SUMS_parts ]]; then (cd "$pd" && sha256sum -c --quiet SHA256SUMS_parts) || die "part checksum mismatch: upload incomplete or broken"
-        say "data: SHA256 of all parts OK"; else say "data: no SHA256SUMS_parts next to the parts -> not verified"; fi
+      [[ -f $pd/SHA256SUMS_parts ]] || die "no SHA256SUMS_parts next to the parts: upload incomplete? ('bash run_gt.sh check' shows the parts)"
+      (cd "$pd" && sha256sum -c --quiet SHA256SUMS_parts) || die "part checksum mismatch: upload incomplete or broken ('bash run_gt.sh check' shows the parts)"
+      say "data: SHA256 of all parts OK"
       rm -rf "$WORK_ROOT/.unpack_tmp"; mkdir -p "$WORK_ROOT/.unpack_tmp"
       cat "$pd"/$PACK.tar.part_* | tar -xf - -C "$WORK_ROOT/.unpack_tmp" || die "tar failed"
       mv "$WORK_ROOT/.unpack_tmp/$PACK" "$WORK_ROOT/$PACK"; rm -rf "$WORK_ROOT/.unpack_tmp"
@@ -329,6 +330,22 @@ stage_check () {
     [[ -e $d ]] && echo "  $d: $(writable "$d" && echo writable || echo read-only), free $(freegb "$d") GB" | tee -a "$JOBLOG" || echo "  $d: missing"; done
   say "== data under $DATA_SRC"
   find "$DATA_SRC" -maxdepth 4 \( -name "$PACK.tar.part_00" -o -name SHA256SUMS_parts -o -name "*.zip" -o -type d -name "$PACK" -o -name "*_last.ckpt" \) 2>/dev/null | head -20 | sed 's/^/  /' | tee -a "$JOBLOG" || true
+  local pd; pd=$(find "$DATA_SRC" -maxdepth 4 -name "$PACK.tar.part_*" -printf "%h\n" 2>/dev/null | sort -u | head -1 || true)
+  if [[ -n $pd ]]; then   # upload progress: which parts are there (by name and size; the full SHA256 check runs in smoke/full)
+    "$PYTHON" - "$pd" "$PACK" <<'EOF2' | tee -a "$JOBLOG"
+import os, re, sys
+d, pack = sys.argv[1:3]
+have = {int(m.group(1)): os.path.getsize(os.path.join(d, f)) for f in os.listdir(d) if (m := re.fullmatch(re.escape(pack) + r"\.tar\.part_(\d+)", f))}
+sums = os.path.join(d, "SHA256SUMS_parts")
+want = sorted(int(re.search(r"part_(\d+)", l).group(1)) for l in open(sums) if "part_" in l) if os.path.exists(sums) else None
+n = len(want) if want else (max(have) + 1 if have else 0)
+miss = [i for i in range(n) if i not in have]
+small = [i for i in sorted(have)[:-1] if have[i] < 2 * 2**30]
+print(f"  parts in {d}: {len(have)}/{n}" + ("" if want else " (SHA256SUMS_parts missing: total unknown)")
+      + (f", missing {miss}" if miss else "") + (f", smaller than 2 GiB (still uploading?) {small}" if small else ""))
+print("  data upload: " + ("COMPLETE (checksums are verified in smoke/full)" if want and not miss and not small else "INCOMPLETE -> wait before smoke/full"))
+EOF2
+  fi
   say "== CPU cores $(nproc 2>/dev/null || echo ?), RAM $(awk '/MemTotal/{printf "%.0f GB", $2/1048576}' /proc/meminfo 2>/dev/null) (data loading needs ~1 core per worker; WORKERS=$WORKERS)"
   say "== tools: gcc $(command -v gcc >/dev/null && echo yes || echo no), nvidia-smi $(command -v nvidia-smi >/dev/null && echo yes || echo no), zip $(command -v zip >/dev/null && echo yes || echo no)"
 }
