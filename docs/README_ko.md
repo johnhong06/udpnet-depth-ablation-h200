@@ -25,6 +25,10 @@ H200 서비스 자체의 사용법(신청, 이슈, 경로 규칙)은 별도 정�
 | 2 | `bash run_gt.sh smoke` | 15분 정도 | 에러 없이 끝나는지, 마지막 줄의 `ms/optimizer step`과 예상 시간 |
 | 3 | `bash run_gt.sh full` | 예상 시간대로 | 30분마다 나오는 `[hb]` 줄(진행률, 남은 시간, 건너뛴 batch, val 최고값) |
 
+**const 모델**도 같은 데이터로 돌릴 수 있습니다 (128 depth는 스크립트가 만듦, 추가 데이터 없음):
+`bash run_gt.sh smoke const` → `bash run_gt.sh full const` → 결과 `/app/output/udpnet_const/results_am_v2_lr1e-4_const.zip`.
+이어 하기용 checkpoint 이름은 `am_v2_lr1e-4_const_last.ckpt`.
+
 끝나면 관리자에게 `/app/output/udpnet_gt/results_am_v2_lr1e-4_gt.zip`을 요청합니다
 (결과 JSON, 로그, TensorBoard, val 최고 checkpoint와 last.ckpt가 들어 있음).
 

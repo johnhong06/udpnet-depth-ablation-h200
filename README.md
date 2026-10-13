@@ -27,7 +27,7 @@ is work space; neither `/app/output` nor `/app/scratch` carries over to the next
 |---|---|
 | GPU quota | **`7`** (one full H200). `1` (a 16 GB slice) is too small for batch 6 |
 | image | `pytorch/pytorch:latest` (deployed: `kau/pytorch-master`, torch 2.11, Python 3.10). `run_gt.sh` installs `requirements.txt` at start and, if torch < 2.6, torch 2.11 + torchvision 0.26 (cu128) |
-| command | `bash run_gt.sh check` → `bash run_gt.sh smoke` → `bash run_gt.sh full` |
+| command | `bash run_gt.sh check` → `bash run_gt.sh smoke` → `bash run_gt.sh full` (`… full const` for the const variant) |
 
 1. Give the admin the 27 data parts + `SHA256SUMS_parts` (see Data) for `/app/data/<any folder>`. They take 57 GB
    of the space that `/app/data` and `/app/output` share (~103 GB free on 2026-09-28) — ask for older packs to be removed if needed.
@@ -35,6 +35,9 @@ is work space; neither `/app/output` nor `/app/scratch` carries over to the next
 3. `smoke` (~15 min): unpack, 300 training steps, quick eval, results zip; prints ms/step and the projected hours.
 4. `full`: unpack → train → eval on `test` and `test_heldout` (full resolution) → `/app/output/udpnet_gt/results_am_v2_lr1e-4_gt.zip`.
    Ask the admin for this zip.
+5. The **const** variant uses the same data (its 128-everywhere priors are generated): `bash run_gt.sh smoke const`, then
+   `bash run_gt.sh full const` → `/app/output/udpnet_const/results_am_v2_lr1e-4_const.zip`. A resume checkpoint for it is
+   named `am_v2_lr1e-4_const_last.ckpt`.
 
 What `run_gt.sh` takes care of:
 
@@ -70,7 +73,7 @@ training (`Final.ckpt`) is not repeated. Modes: `check | data | smoke | full | t
 | `DATA_DIR` | – | an unpacked `udpnet_gt_data` folder (skips the search) |
 | `WORK_ROOT` | `/app/scratch/udpnet_work`, else `./work` | unpacked data and the training folder |
 | `OUT_DIR` | `/app/output/udpnet_<variant>`, else `./outputs` | checkpoints, TensorBoard, logs, eval JSON, results zip |
-| `VARIANT` | `gt` | `gt` / `const` / `dav2` (`dav2` also needs `depth_hazy/dav2`, not in the gt pack) |
+| `VARIANT` (or 2nd argument) | `gt` | `gt` / `const` / `dav2` (`dav2` also needs `depth_hazy/dav2`, not in the gt pack) |
 | `TIME_LIMIT_H`, `EVAL_RESERVE_MIN` | `34`, `45` | stop training in time for eval + zip (`0` = no limit) |
 | `STALL_MIN`, `MAX_RETRY`, `HB_MIN` | `30`, `10`, `30` | watchdog, restarts, status-line interval |
 | `RESUME_CKPT` | – | checkpoint to resume from (default: `*/am_v2_lr1e-4_gt_last.ckpt` under `DATA_SRC`) |

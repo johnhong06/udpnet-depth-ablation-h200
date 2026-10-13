@@ -10,13 +10,15 @@
 #   bash run_gt.sh full    # data -> train (watchdog, time limit, auto-restart) -> eval -> results zip
 #   bash run_gt.sh eval    # eval + results zip only (checkpoints in OUT_DIR, or RESUME_CKPT)
 #   bash run_gt.sh data    # find, verify and unpack the data only
+#   bash run_gt.sh full const   # 2nd argument = variant (gt default; const needs no extra data)
 # Elsewhere: DATA_DIR=<unpacked udpnet_gt_data> OUT_DIR=<out> bash run_gt.sh full
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")" && pwd)
 MODE=${1:-${MODE:-full}}
 
 # ------------------------------------------------------------------ settings (env overrides)
-VARIANT=${VARIANT:-gt}                  # gt | const | dav2 (dav2 also needs depth_hazy/dav2, not in the gt pack)
+VARIANT=${2:-${VARIANT:-gt}}            # gt | const | dav2 (dav2 also needs depth_hazy/dav2, not in the gt pack)
+case $VARIANT in gt|const|dav2) ;; *) echo "unknown variant '$VARIANT' (gt | const | dav2)"; exit 1;; esac
 PYTHON=${PYTHON:-$(command -v python >/dev/null 2>&1 && echo python || echo python3)}
 PACK=${PACK:-udpnet_gt_data}            # data pack: $PACK.tar.part_NN + SHA256SUMS_parts (or $PACK.zip)
 DATA_SRC=${DATA_SRC:-/app/data}         # where the pack / an unpacked copy is searched (read-only is fine)
