@@ -46,7 +46,7 @@ GPU 할당량 `1`(16 GB 조각)은 쓰지 않는다. 이 학습은 batch 6에서
 
 | 순서 | 코드 실행 명령어 | 걸리는 시간 | 끝나면 확인할 것 |
 |---|---|---|---|
-| 1 | `bash run_gt.sh check` | 1분 | `data upload: COMPLETE`(조각 27/27)인지, `/app/scratch` 여유 공간 57 GB 이상, GPU 메모리, CPU 코어 수 |
+| 1 | `bash run_gt.sh check` | 2분 | `data upload: COMPLETE`(조각 27/27)인지, `/app/scratch` 여유 공간 57 GB 이상, GPU 메모리, CPU 코어 수 |
 | 2 | `bash run_gt.sh smoke` | 15분 안팎 | 에러 없이 끝났는지, 마지막 줄 `[smoke] … ms/optimizer step -> … h` |
 | 3 | `bash run_gt.sh full` | 18~26시간 예상 | 30분마다 나오는 `[hb]` 줄, 마지막 결과 표 |
 | 4 | `bash run_gt.sh smoke const` | 15분 안팎 | 2번과 같음 |

@@ -33,6 +33,7 @@ WORKERS=${WORKERS:-6}
 MONITOR_FREQ=${MONITOR_FREQ:-100}
 PROBE_FREQ=${PROBE_FREQ:-5000}
 SMOKE_STEPS=${SMOKE_STEPS:-300}
+GROW_SEC=${GROW_SEC:-60}                # check: a part whose size changes within this many seconds is still being copied
 EVAL_TIMEOUT_MIN=${EVAL_TIMEOUT_MIN:-240}  # per split; a hung GPU during eval must not hold the job
 export TQDM_MININTERVAL=${TQDM_MININTERVAL:-30}   # progress bar redraw every 30 s: keeps the log small (it also feeds the stall check)
 
@@ -333,15 +334,16 @@ stage_check () {
   find "$DATA_SRC" -maxdepth 4 \( -name "$PACK.tar.part_00" -o -name "$PACK.zip" -o -type d -name "$PACK" -o -name "am_v2_lr1e-4_*_last.ckpt" \) 2>/dev/null | head -10 | sed 's/^/  /' | tee -a "$JOBLOG" || true
   local pd; pd=$(find "$DATA_SRC" -maxdepth 4 -name "$PACK.tar.part_*" -printf "%h\n" 2>/dev/null | sort -u | head -1 || true)
   if [[ -n $pd ]]; then   # upload progress: which parts are there (by name and size; the full SHA256 check runs in smoke/full)
-    "$PYTHON" - "$pd" "$PACK" <<'EOF2' | tee -a "$JOBLOG"
+    say "upload check: sizes now and after ${GROW_SEC} s"
+    "$PYTHON" - "$pd" "$PACK" "$GROW_SEC" <<'EOF2' | tee -a "$JOBLOG"
 import os, re, sys, time
-d, pack = sys.argv[1:3]
+d, pack, grow = sys.argv[1], sys.argv[2], int(sys.argv[3])
 GIB2 = 2 * 2**30
 LAST = {"udpnet_gt_data": (27, 1141204992)}   # (number of parts, exact size of the last part) of the published pack
 pat = re.compile(re.escape(pack) + r"\.tar\.part_(\d+)")
 def sizes():
     return {int(m.group(1)): os.path.getsize(os.path.join(d, f)) for f in os.listdir(d) if (m := pat.fullmatch(f))}
-a = sizes(); time.sleep(10); have = sizes()            # two snapshots: a file that grows is still being copied
+a = sizes(); time.sleep(grow); have = sizes()          # two snapshots: a file that grows is still being copied
 sums = os.path.join(d, "SHA256SUMS_parts")
 want = sorted(int(re.search(r"part_(\d+)", l).group(1)) for l in open(sums) if "part_" in l) if os.path.exists(sums) else None
 n = len(want) if want else (max(have) + 1 if have else 0)
