@@ -327,6 +327,7 @@ stage_check () {
     [[ -e $d ]] && echo "  $d: $(writable "$d" && echo writable || echo read-only), free $(freegb "$d") GB" | tee -a "$JOBLOG" || echo "  $d: missing"; done
   say "== data under $DATA_SRC"
   find "$DATA_SRC" -maxdepth 4 \( -name "$PACK.tar.part_00" -o -name SHA256SUMS_parts -o -name "*.zip" -o -type d -name "$PACK" -o -name "*_last.ckpt" \) 2>/dev/null | head -20 | sed 's/^/  /' | tee -a "$JOBLOG" || true
+  say "== CPU cores $(nproc 2>/dev/null || echo ?), RAM $(awk '/MemTotal/{printf "%.0f GB", $2/1048576}' /proc/meminfo 2>/dev/null) (data loading needs ~1 core per worker; WORKERS=$WORKERS)"
   say "== tools: gcc $(command -v gcc >/dev/null && echo yes || echo no), nvidia-smi $(command -v nvidia-smi >/dev/null && echo yes || echo no), zip $(command -v zip >/dev/null && echo yes || echo no)"
 }
 
