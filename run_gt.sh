@@ -334,17 +334,27 @@ stage_check () {
   local pd; pd=$(find "$DATA_SRC" -maxdepth 4 -name "$PACK.tar.part_*" -printf "%h\n" 2>/dev/null | sort -u | head -1 || true)
   if [[ -n $pd ]]; then   # upload progress: which parts are there (by name and size; the full SHA256 check runs in smoke/full)
     "$PYTHON" - "$pd" "$PACK" <<'EOF2' | tee -a "$JOBLOG"
-import os, re, sys
+import os, re, sys, time
 d, pack = sys.argv[1:3]
-have = {int(m.group(1)): os.path.getsize(os.path.join(d, f)) for f in os.listdir(d) if (m := re.fullmatch(re.escape(pack) + r"\.tar\.part_(\d+)", f))}
+GIB2 = 2 * 2**30
+LAST = {"udpnet_gt_data": (27, 1141204992)}   # (number of parts, exact size of the last part) of the published pack
+pat = re.compile(re.escape(pack) + r"\.tar\.part_(\d+)")
+def sizes():
+    return {int(m.group(1)): os.path.getsize(os.path.join(d, f)) for f in os.listdir(d) if (m := pat.fullmatch(f))}
+a = sizes(); time.sleep(10); have = sizes()            # two snapshots: a file that grows is still being copied
 sums = os.path.join(d, "SHA256SUMS_parts")
 want = sorted(int(re.search(r"part_(\d+)", l).group(1)) for l in open(sums) if "part_" in l) if os.path.exists(sums) else None
 n = len(want) if want else (max(have) + 1 if have else 0)
 miss = [i for i in range(n) if i not in have]
-small = [i for i in sorted(have)[:-1] if have[i] < 2 * 2**30]
+growing = [i for i in have if a.get(i) != have[i]]
+short = [i for i in have if i < n - 1 and have[i] < GIB2]
+if pack in LAST and n == LAST[pack][0] and (n - 1) in have and have[n - 1] != LAST[pack][1]:
+    short.append(n - 1)
 print(f"  parts in {d}: {len(have)}/{n}" + ("" if want else " (SHA256SUMS_parts missing: total unknown)")
-      + (f", missing {miss}" if miss else "") + (f", smaller than 2 GiB (still uploading?) {small}" if small else ""))
-print("  data upload: " + ("COMPLETE (checksums are verified in smoke/full)" if want and not miss and not small else "INCOMPLETE -> wait before smoke/full"))
+      + (f", missing {miss}" if miss else "") + (f", still growing {sorted(growing)}" if growing else "")
+      + (f", incomplete size {sorted(set(short))}" if short else ""))
+ok = want and not miss and not growing and not short
+print("  data upload: " + ("COMPLETE (checksums are verified in smoke/full)" if ok else "INCOMPLETE -> wait before smoke/full"))
 EOF2
   fi
   say "== CPU cores $(nproc 2>/dev/null || echo ?), RAM $(awk '/MemTotal/{printf "%.0f GB", $2/1048576}' /proc/meminfo 2>/dev/null) (data loading needs ~1 core per worker; WORKERS=$WORKERS)"
