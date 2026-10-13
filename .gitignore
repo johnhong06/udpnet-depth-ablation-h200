@@ -1,0 +1,14 @@
+# data and run outputs are never committed (see README "Data")
+/data/
+/outputs/
+/work/
+*.zip
+*.ckpt
+*.pt
+*.pth
+udpnet/results
+udpnet/logs
+__pycache__/
+*.pyc
+.venv/
+venv/

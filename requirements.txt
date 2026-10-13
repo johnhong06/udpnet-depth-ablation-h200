@@ -1,0 +1,10 @@
+# Install PyTorch first, matching the cluster's CUDA (https://pytorch.org/get-started/locally/):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128   (or cu126 / cu130 ...)
+# Tested with torch 2.13.0+cu130, torchvision 0.28.0, Python 3.14. Needs torch >= 2.6 (torch.nn.utils.get_total_norm).
+pytorch-lightning==2.6.6
+torchmetrics==1.9.0
+einops==0.8.2
+pillow>=10
+numpy>=1.26
+tensorboard>=2.15
+pytorch-msssim==1.0.0
