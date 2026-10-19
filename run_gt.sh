@@ -29,7 +29,8 @@ HB_MIN=${HB_MIN:-30}                    # one status line every HB_MIN minutes
 MAX_RETRY=${MAX_RETRY:-10}              # restarts after a crash / stall, each from last.ckpt
 LINK_MODE=${LINK_MODE:-symlink}         # symlink | copy (hardlink only if data and work dir share a file system)
 COMPILE=${COMPILE:-1}                   # torch.compile the training step (fp32 kept); auto-off if it fails
-WORKERS=${WORKERS:-6}
+NPROC=$(nproc 2>/dev/null || echo 8)
+WORKERS=${WORKERS:-$(( NPROC >= 48 ? 16 : (NPROC >= 24 ? 8 : 6) ))}   # data loading only; no effect on the results
 MONITOR_FREQ=${MONITOR_FREQ:-100}
 PROBE_FREQ=${PROBE_FREQ:-5000}
 SMOKE_STEPS=${SMOKE_STEPS:-300}
@@ -90,6 +91,7 @@ EOF
   if [[ $COMPILE == 1 ]] && ! command -v gcc >/dev/null 2>&1 && ! command -v cc >/dev/null 2>&1; then
     COMPILE=0; say "no C compiler in the container -> torch.compile off (COMPILE=0: same fp32 math, slower)"
   fi
+  say "CPU cores $NPROC -> data workers $WORKERS | /dev/shm $(df -h /dev/shm 2>/dev/null | awk 'NR==2{print $2}')"
   say "recipe: $SAMPLES images, batch $BATCH x accum $ACCUM, lr $LR, patch $PATCH, $PRECISION, compile $COMPILE," \
       "val every $VALID_FREQ ep (crop $VAL_CROP) | time limit ${TIME_LIMIT_H} h, stall ${STALL_MIN} min"
 }
@@ -205,6 +207,7 @@ udp_cd () {   # main.py / test.py write to ./results and ./logs -> point them in
 # ------------------------------------------------------------------ status helpers (read the full log)
 # tqdm redraws with \r and our print() lines can land right after a bar on the same line -> split before the tags
 norm () { tr '\r' '\n' | sed -E 's/\[(monitor|guard|probe)\]/\n[\1]/g'; }
+gpu_util () { nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -dc 0-9 || true; }
 last_step () { norm < "$LOG" 2>/dev/null | grep -a '^\[monitor\] step' | tail -1 | awk '{print $3}' || true; }
 heartbeat () {   # one line: progress, speed, ETA, activations, skips, best val
   local step=$1 rate=$2 total=$3 mon skips best
@@ -213,7 +216,8 @@ heartbeat () {   # one line: progress, speed, ETA, activations, skips, best val
   best=$(ls "$OUT_DIR/results/$NAME/checkpoints"/epoch_epoch=*_psnr_val_psnr=*.ckpt 2>/dev/null \
          | sed -E 's/.*epoch=([0-9]+)_psnr_val_psnr=([0-9.]+)\.ckpt/\2 (ep \1)/' | sort -rn | head -1 || true)
   local eta=""; [[ -n $rate && $rate != 0 ]] && eta=$(awk -v r="$rate" -v s="$step" -v t="$total" 'BEGIN{printf "%.0f ms/step, ETA %.1f h", r*1000, (t-s)*r/3600}')
-  say "[hb] step $step/$total ($(awk -v s="$step" -v t="$total" 'BEGIN{printf "%.1f", 100*s/t}')%) $eta | $mon | skips ${skips:-0} | best val ${best:--}"
+  local gu; gu=$(awk '{s += $1; n++} END {if (n) printf "%.0f%%", s/n}' "$WORK_ROOT/.gpu_util" 2>/dev/null); : > "$WORK_ROOT/.gpu_util"
+  say "[hb] step $step/$total ($(awk -v s="$step" -v t="$total" 'BEGIN{printf "%.1f", 100*s/t}')%) $eta | GPU ${gu:-?} | $mon | skips ${skips:-0} | best val ${best:--}"
 }
 
 # ------------------------------------------------------------------ train: watchdog + time limit + restarts
@@ -228,12 +232,12 @@ stage_train () {
   n=$(ls "$VDIR/train/hazy" | wc -l); ep=$(( (SAMPLES + n - 1) / n )); total=$(( ep * (n / BATCH / ACCUM) ))
   smoke=(); [[ $MODE == smoke ]] && { smoke=(--max_steps "$SMOKE_STEPS"); total=$SMOKE_STEPS; }
   local deadline; deadline=$(awk -v h="$TIME_LIMIT_H" -v r="$EVAL_RESERVE_MIN" 'BEGIN{d = h*3600 - r*60; if (d < 60) d = 60; printf "%d", (h > 0 ? d : 0)}')
-  say "train $NAME: $n images -> $ep epochs, $total optimizer steps | full log $LOG"
+  say "train $NAME: $n images -> $ep epochs, $total optimizer steps | full log $LOG"; rm -f "$WORK_ROOT/.gpu_util_all"
   for ((try = 0; try <= MAX_RETRY; try++)); do
     local resume=(); [[ -f $ck/last.ckpt ]] && resume=(--resume "$ck/last.ckpt")
     extra=(); [[ $COMPILE == 1 ]] && extra=(--compile)
     local off off0; off=$(stat -c %s "$LOG" 2>/dev/null || echo 0); off0=$off
-    say "train: start (try $try${resume:+, resume from last.ckpt}, compile $COMPILE)"
+    say "train: start (try $try${resume:+, resume from last.ckpt}, compile $COMPILE, workers $WORKERS)"
     echo "[run_gt $(date '+%m-%d %H:%M:%S')] start try $try" >> "$LOG"   # fresh mtime: the stall clock starts now
     local probe=(); [[ -f $DATA_DIR/probe/nan_batch_1008.pt ]] && probe=(--probe_batch "$DATA_DIR/probe/nan_batch_1008.pt" --probe_freq "$PROBE_FREQ")
     "$PYTHON" -c 'import os, sys; os.setsid(); os.execvp(sys.argv[1], sys.argv[1:])' "$PYTHON" main.py --model_name "$NAME" --data_dir "$VDIR" \
@@ -243,9 +247,12 @@ stage_train () {
       --monitor_freq "$MONITOR_FREQ" "${probe[@]}" \
       --accum "$ACCUM" --logs "$NAME" "${extra[@]}" "${smoke[@]}" "${resume[@]}" >> "$LOG" 2>&1 < /dev/null &
     local bg=$! pg=$!   # setsid + exec: the PID is the process-group id of main.py and its data workers
-    reason=""; local t_hb=$SECONDS s_hb; s_hb=$(last_step); s_hb=${s_hb:-0}
+    reason=""; local t_hb=$SECONDS s_hb; s_hb=$(last_step); s_hb=${s_hb:-0}; : > "$WORK_ROOT/.gpu_util"
     while alive "$bg"; do
-      sleep 60
+      sleep 10
+      local u st; u=$(gpu_util); st=$(last_step); st=${st:-0}
+      if [[ -n $u ]] && (( st >= 100 )); then   # skip compile / warm-up
+        echo "$u" >> "$WORK_ROOT/.gpu_util"; echo "$u" >> "$WORK_ROOT/.gpu_util_all"; fi
       # surface guard lines (first 20 over the whole run) and errors
       local new; new=$(tail -c +$((off + 1)) "$LOG" 2>/dev/null | norm | grep -aE '^\[guard\]|Traceback|Error|error:' || true)
       off=$(stat -c %s "$LOG")
@@ -271,6 +278,8 @@ stage_train () {
     [[ $reason == timelimit ]] && { TRAIN_INCOMPLETE=1; return 0; }
     local seg tailtxt; seg=$(tail -c +$((off0 + 1)) "$LOG" | norm || true); tailtxt=$(grep -av '^\s*$' <<< "$seg" | tail -400 || true)
     if grep -aqE 'OutOfMemoryError|CUDA out of memory' <<< "$tailtxt"; then die "train: out of memory -> not retrying (README 'GPU memory')"; fi
+    if (( WORKERS > 6 )) && grep -aqiE 'shared memory|/dev/shm|Bus error|DataLoader worker .* (killed|exited unexpectedly)' <<< "$tailtxt"; then
+      WORKERS=6; say "train: data-loader / shared-memory failure -> retry with WORKERS=6"; continue; fi
     if [[ $COMPILE == 1 ]] && ! grep -aq '^\[monitor\]' <<< "$seg" \
        && grep -aqE 'BackendCompilerFailed|InductorError|CompilationError|torch\._dynamo\.exc|torch\._inductor\.exc' <<< "$tailtxt"; then
       COMPILE=0; say "train: torch.compile failed -> retry with COMPILE=0 (same fp32 math, slower)"; continue; fi
@@ -308,7 +317,8 @@ stage_package () {   # one zip for the admin to hand back: results, logs, Tensor
   local z=results_$NAME.zip b f items=()
   b=$(best_ckpt); b=${b#"$OUT_DIR"/}
   for f in "summary_$NAME" "train_$NAME.log" "eval_$NAME.log" "run_${MODE}_$NAME.log" "logs/$NAME" "$b" \
-           "results/$NAME/checkpoints/last.ckpt" "results/$NAME/checkpoints/Final.ckpt"; do [[ -e $f ]] && items+=("$f"); done
+           "results/$NAME/checkpoints/last.ckpt" "results/$NAME/checkpoints/Final.ckpt"; do
+    [[ -e $f && " ${items[*]} " != *" $f "* ]] && items+=("$f"); done
   rm -f "$z"
   "$PYTHON" - "$z" "${items[@]}" <<'EOF2' || say "!!! could not write $z"
 import os, sys, zipfile
@@ -377,7 +387,7 @@ case $MODE in
   *) echo "usage: bash run_gt.sh check|smoke|full|train|eval|data"; exit 1 ;;
 esac
 if [[ $MODE == smoke ]]; then   # projected full run from the measured speed (steps 100..300, compile warm-up excluded)
-  "$PYTHON" - "$OUT_DIR/logs/$NAME" <<'EOF' | tee -a "$JOBLOG" || true
+  "$PYTHON" - "$OUT_DIR/logs/$NAME" "$WORK_ROOT/.gpu_util_all" <<'EOF' | tee -a "$JOBLOG" || true
 import glob, os, sys
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 d = sorted(glob.glob(os.path.join(sys.argv[1], "version_*")), key=os.path.getmtime)[-1]
@@ -386,6 +396,10 @@ s = [x for x in ea.Scalars("train_loss") if x.step >= 100]
 if len(s) >= 2:
     r = (s[-1].wall_time - s[0].wall_time) / (s[-1].step - s[0].step)
     print(f"[smoke] {r * 1000:.0f} ms/optimizer step -> full run 251,130 steps ~ {251130 * r / 3600:.1f} h (+ ~22 validations)")
+u = [int(x) for x in open(sys.argv[2]).read().split()] if os.path.exists(sys.argv[2]) else []
+if u:
+    print(f"[smoke] GPU utilisation during training: mean {sum(u) / len(u):.0f}% over {len(u)} samples"
+          + (" -> GPU is not kept busy (data loading or kernel launches limit the speed)" if sum(u) / len(u) < 85 else ""))
 EOF
 fi
 say "DONE $MODE"
