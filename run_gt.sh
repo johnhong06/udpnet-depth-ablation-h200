@@ -7,7 +7,7 @@
 # One-line commands (H200 request: GPU quota 7 = one full H200; quota 1 = 16 GB slice is too small):
 #   bash run_gt.sh check   # paths, free space, GPU (via torch), packages, where the data is              (~1 min)
 #   bash run_gt.sh smoke   # data + 300 training steps + quick eval; prints ms/step and projected hours     (~15 min)
-#   bash run_gt.sh full    # data -> train (watchdog, time limit, auto-restart) -> eval -> results zip
+#   bash run_gt.sh full    # data -> train (watchdog, auto-restart) -> eval -> results zip
 #   bash run_gt.sh eval    # eval + results zip only (checkpoints in OUT_DIR, or RESUME_CKPT)
 #   bash run_gt.sh data    # find, verify and unpack the data only
 #   bash run_gt.sh full const   # 2nd argument = variant (gt default; const needs no extra data)
@@ -22,7 +22,7 @@ case $VARIANT in gt|const|dav2) ;; *) echo "unknown variant '$VARIANT' (gt | con
 PYTHON=${PYTHON:-$(command -v python >/dev/null 2>&1 && echo python || echo python3)}
 PACK=${PACK:-udpnet_gt_data}            # data pack: $PACK.tar.part_NN + SHA256SUMS_parts (or $PACK.zip)
 DATA_SRC=${DATA_SRC:-/app/data}         # where the pack / an unpacked copy is searched (read-only is fine)
-TIME_LIMIT_H=${TIME_LIMIT_H:-34}        # stop training after this many hours of the job, then eval + zip (0 = no limit; decimals ok)
+TIME_LIMIT_H=${TIME_LIMIT_H:-0}         # optional: stop training after this many hours of the job, then eval + zip (0 = no limit; decimals ok)
 EVAL_RESERVE_MIN=${EVAL_RESERVE_MIN:-45}  # time kept for eval + zip before TIME_LIMIT_H
 STALL_MIN=${STALL_MIN:-30}              # no new training log output for this long -> kill and restart from last.ckpt
 HB_MIN=${HB_MIN:-30}                    # one status line every HB_MIN minutes
@@ -93,7 +93,7 @@ EOF
   fi
   say "CPU cores $NPROC -> data workers $WORKERS | /dev/shm $(df -h /dev/shm 2>/dev/null | awk 'NR==2{print $2}')"
   say "recipe: $SAMPLES images, batch $BATCH x accum $ACCUM, lr $LR, patch $PATCH, $PRECISION, compile $COMPILE," \
-      "val every $VALID_FREQ ep (crop $VAL_CROP) | time limit ${TIME_LIMIT_H} h, stall ${STALL_MIN} min"
+      "val every $VALID_FREQ ep (crop $VAL_CROP) | time limit $( [[ $TIME_LIMIT_H == 0 ]] && echo none || echo "${TIME_LIMIT_H} h"), stall ${STALL_MIN} min"
 }
 
 # ------------------------------------------------------------------ data: find -> verify -> unpack into WORK_ROOT

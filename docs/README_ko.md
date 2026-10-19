@@ -48,9 +48,9 @@ GPU 할당량 `1`(16 GB 조각)은 쓰지 않는다. 이 학습은 batch 6에서
 |---|---|---|---|
 | 1 | `bash run_gt.sh check` | 2분 | `data upload: COMPLETE`(조각 27/27)인지, `/app/scratch` 여유 공간 57 GB 이상, GPU 메모리, CPU 코어 수 |
 | 2 | `bash run_gt.sh smoke` | 15분 안팎 | 에러 없이 끝났는지, 마지막 줄 `[smoke] … ms/optimizer step -> … h` |
-| 3 | `bash run_gt.sh full` | 18~26시간 예상 | 30분마다 나오는 `[hb]` 줄, 마지막 결과 표 |
+| 3 | `bash run_gt.sh full` | 35시간 안팎 | 30분마다 나오는 `[hb]` 줄, 마지막 결과 표 |
 | 4 | `bash run_gt.sh smoke const` | 15분 안팎 | 2번과 같음 |
-| 5 | `bash run_gt.sh full const` | 18~26시간 예상 | 3번과 같음 |
+| 5 | `bash run_gt.sh full const` | 35시간 안팎 | 3번과 같음 |
 
 3번과 5번은 할당량이 허락하면 동시에 요청해도 된다.
 
@@ -72,14 +72,11 @@ zip에는 결과 JSON(test, test_heldout), 학습·평가 로그, TensorBoard �
 | 학습 로그가 30분 동안 늘지 않음 | 학습을 끝내고 `last.ckpt`에서 다시 시작 (최대 10번) |
 | GPU 메모리 부족 | 재시도하지 않고 멈춤 |
 | `torch.compile` 실패 | compile을 끄고 다시 시작 (계산은 같은 fp32, 속도만 느려짐) |
-| 작업 시작 후 33시간 15분 경과 | 학습을 멈추고 그때까지의 val 최고 checkpoint로 평가, 결과 zip까지 만듦 |
 | 평가가 4시간 넘게 걸림 | 평가를 끝내고 오류로 표시 |
 | torch가 2.6 미만 | torch 2.11 + torchvision 0.26 설치 |
 
-시간 제한을 두는 이유는 예전에 한 작업이 35시간 만에 강제로 종료된 적이 있어서다.
-
-**시간 제한에 걸려 이어서 할 때**: zip 안의 `last.ckpt`를 관리자에게 보내 `/app/data/<폴더>/`에 아래 이름으로 올려
-달라고 한 뒤, 같은 `full` 명령을 다시 요청한다. 거기서부터 이어서 학습한다.
+**작업이 중간에 끊겨 이어서 할 때**: 결과 zip 안의 `last.ckpt`를 관리자에게 보내 `/app/data/<폴더>/`에 아래 이름으로
+올려 달라고 한 뒤, 같은 `full` 명령을 다시 요청한다. 거기서부터 이어서 학습한다.
 
 | 모델 | 파일 이름 |
 |---|---|
@@ -108,5 +105,4 @@ zip에는 결과 JSON(test, test_heldout), 학습·평가 로그, TensorBoard �
 ## 6. 시간 예상
 
 연구실 RTX PRO 4500 Blackwell에서는 730 ms/step × 251,130 step으로 검증까지 합쳐 약 52시간이 걸린다.
-H200은 2~3배 빠를 것으로 보고 18~26시간을 예상한다. 정확한 값은 `smoke`의 마지막 줄로 확인한다.
-34시간 안에 끝나지 않는 속도라면 시간 제한에서 멈춘 뒤 한 번 더 이어서 돌리면 된다.
+H200 첫 `smoke`(worker 6)는 505 ms/step, 전체 약 35시간이었다. 정확한 값은 `smoke`의 마지막 줄로 확인한다.

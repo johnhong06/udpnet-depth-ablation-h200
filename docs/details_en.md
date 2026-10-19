@@ -47,8 +47,8 @@ What `run_gt.sh` takes care of:
 - **Watchdog**: if the training log gets no new line for `STALL_MIN` (30) minutes, the run is killed and restarted from
   `last.ckpt` (up to `MAX_RETRY` = 10 times). Out of memory stops without retrying; a failing `torch.compile` is retried
   without compile.
-- **Time limit**: after `TIME_LIMIT_H` (34) hours minus `EVAL_RESERVE_MIN` (45) the training is stopped, the best
-  checkpoint so far is evaluated and zipped (a job was once killed at 35 h). To continue in a new job, ask the admin
+- **Optional time limit** (off by default): with `TIME_LIMIT_H=<h>` the training stops at that job time minus
+  `EVAL_RESERVE_MIN` (45), the best checkpoint so far is evaluated and zipped. To continue in a new job, ask the admin
   to put `results/am_v2_lr1e-4_gt/checkpoints/last.ckpt` from the zip into `/app/data/<folder>/am_v2_lr1e-4_gt_last.ckpt`
   and request `full` again; it resumes from there.
 - **Console**: one status line every `HB_MIN` (30) minutes (step, ms/step, ETA, activations, skipped batches, best val PSNR),
@@ -74,7 +74,7 @@ training (`Final.ckpt`) is not repeated. Modes: `check | data | smoke | full | t
 | `WORK_ROOT` | `/app/scratch/udpnet_work`, else `./work` | unpacked data and the training folder |
 | `OUT_DIR` | `/app/output/udpnet_<variant>`, else `./outputs` | checkpoints, TensorBoard, logs, eval JSON, results zip |
 | `VARIANT` (or 2nd argument) | `gt` | `gt` / `const` / `dav2` (`dav2` also needs `depth_hazy/dav2`, not in the gt pack) |
-| `TIME_LIMIT_H`, `EVAL_RESERVE_MIN` | `34`, `45` | stop training in time for eval + zip (`0` = no limit) |
+| `TIME_LIMIT_H`, `EVAL_RESERVE_MIN` | `0` (none), `45` | optional: stop training in time for eval + zip |
 | `STALL_MIN`, `MAX_RETRY`, `HB_MIN` | `30`, `10`, `30` | watchdog, restarts, status-line interval |
 | `RESUME_CKPT` | – | checkpoint to resume from (default: `*/am_v2_lr1e-4_gt_last.ckpt` under `DATA_SRC`) |
 | `LINK_MODE` | `symlink` | `copy` if the file system has no symlinks (~75 GB) |
@@ -159,7 +159,7 @@ summary_am_v2_lr1e-4_gt/gt__test.json, gt__test_heldout.json    -> summary table
 ## Layout
 
 ```
-run_gt.sh          entry point (setup -> data -> layout -> train with watchdog/time limit -> eval -> results zip)
+run_gt.sh          entry point (setup -> data -> layout -> train with watchdog -> eval -> results zip)
 udpnet/            UDPNet training / evaluation code (modified from upstream, see NOTICE.md)
 upstream_orig/     the upstream files that were modified, unchanged, for diff
 ablation/          layout and prior scripts of the ablation; run_depth_ablation.sh = the local 3-variant driver
