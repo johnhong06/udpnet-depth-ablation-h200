@@ -355,6 +355,10 @@ if pack in LAST and n == LAST[pack][0] and (n - 1) in have and have[n - 1] != LA
 print(f"  parts in {d}: {len(have)}/{n}" + ("" if want else " (SHA256SUMS_parts missing: total unknown)")
       + (f", missing {miss}" if miss else "") + (f", still growing {sorted(growing)}" if growing else "")
       + (f", incomplete size {sorted(set(short))}" if short else ""))
+temp = sorted(f for f in os.listdir(d) if (pack + ".tar.part_") in f and not pat.fullmatch(f))   # .part / .crdownload / rclone .partial ...
+if temp:
+    print(f"  temporary / partial files (a download may still be running): {temp[:10]}"
+          + (f" (+{len(temp) - 10} more)" if len(temp) > 10 else ""))
 ok = want and not miss and not growing and not short
 print("  data upload: " + ("COMPLETE (checksums are verified in smoke/full)" if ok else "INCOMPLETE -> wait before smoke/full"))
 EOF2
