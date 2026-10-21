@@ -36,10 +36,12 @@ test_heldout은 test의 일부다. 두 세트는 시점 구성도 다르다. 학
 
 | 모델 | test PSNR | test gain | test_heldout PSNR | test_heldout gain | val 최고 PSNR (epoch) |
 |---|---|---|---|---|---|
-| 안개 입력 | | – | | – | – |
+| 안개 입력 | 17.12 | – | 15.18 | – | – |
 | dav2 | | | | | |
-| gt | | | | | |
+| gt | 34.65 | +17.53 | 28.93 | +13.75 | 41.89 (56) |
 | const | | | | | |
+
+단위는 dB. SSIM은 gt 기준 test 0.738 → 0.984, test_heldout 0.690 → 0.972 (안개 입력 → 출력).
 
 ## 비교
 
