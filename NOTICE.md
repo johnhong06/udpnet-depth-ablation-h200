@@ -31,7 +31,8 @@ Comments in the modified files are marked `[mod]`.
 
 ## Own work (this repository)
 
-`run_gt.sh`, `ablation/` (`make_layout.py`, `make_dav2_depth.py`, `link_layout.py`, `run_depth_ablation.sh`),
+`run_gt.sh`, `ablation/` (`make_layout.py`, `make_dav2_depth.py`, `link_layout.py`, `check_dav2_priors.py`,
+`dav2_reference_stats.json` — summary statistics of 200 DAv2 priors, `run_depth_ablation.sh`),
 `README.md`, `docs/`. Released under the same Apache License 2.0.
 
 ## Data and models (not redistributed here)
@@ -40,7 +41,7 @@ Comments in the modified files are marked `[mod]`.
   metric depth. The data archive used by `run_gt.sh` is derived from it (synthetic haze, GT depth priors) and is
   **not** part of this repository; its use is subject to the AerialMetric terms — check them before sharing the archive.
 - **Depth Anything V2 Large** (`depth-anything/Depth-Anything-V2-Large-hf`; Yang et al., NeurIPS 2024): used only
-  for the `dav2` prior (`ablation/make_dav2_depth.py`), not by the `gt` run. Check the model card for its license
+  for the `dav2` prior (`ablation/make_dav2_depth.py`), downloaded at run time and not redistributed here. Check the model card for its license
   (the Large checkpoint is distributed under a non-commercial license).
 
 ## Citation

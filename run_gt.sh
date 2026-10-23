@@ -34,6 +34,8 @@ WORKERS=${WORKERS:-$(( NPROC >= 48 ? 16 : (NPROC >= 24 ? 8 : 6) ))}   # data loa
 MONITOR_FREQ=${MONITOR_FREQ:-100}
 PROBE_FREQ=${PROBE_FREQ:-5000}
 SMOKE_STEPS=${SMOKE_STEPS:-300}
+DAV2_TIMEOUT_MIN=${DAV2_TIMEOUT_MIN:-240}  # dav2 only: limit for computing the DAv2 priors on this machine
+DAV2_CHECK=${DAV2_CHECK:-1}             # dav2 only: compare the new priors with those of the local dav2 run (1 = stop if they differ)
 GROW_SEC=${GROW_SEC:-60}                # check: a part whose size changes within this many seconds is still being copied
 EVAL_TIMEOUT_MIN=${EVAL_TIMEOUT_MIN:-240}  # per split; a hung GPU during eval must not hold the job
 export TQDM_MININTERVAL=${TQDM_MININTERVAL:-30}   # progress bar redraw every 30 s: keeps the log small (it also feeds the stall check)
@@ -75,6 +77,11 @@ stage_setup () {
     say "installing requirements.txt"
     "$PYTHON" -m pip install -q -r "$REPO/requirements.txt" 2>&1 | tail -3 || true
     "$PYTHON" -c "import pytorch_lightning, torchmetrics, einops, pytorch_msssim, tensorboard" || die "requirements not importable"
+  fi
+  if [[ $VARIANT == dav2 ]] && ! "$PYTHON" -c "import transformers, sys; sys.exit(0 if transformers.__version__ == '5.16.1' else 1)" 2>/dev/null; then
+    say "installing transformers 5.16.1 (DAv2 priors; same version as the local dav2 run)"
+    "$PYTHON" -m pip install -q "transformers==5.16.1" 2>&1 | tail -3 || true
+    "$PYTHON" -c "import transformers" || die "transformers not importable"
   fi
   "$PYTHON" - <<'EOF' | tee -a "$JOBLOG"
 import sys, torch, torchvision, pytorch_lightning as pl
@@ -189,12 +196,32 @@ stage_prep () {
   cp -f "$DATA_DIR/udpnet_haze_asm_v2/splits.json" "$LROOT/splits.json"
   ln -sfn "$DATA_DIR/udpnet_haze_asm_v2/depth_frames/gt" "$LROOT/depth_frames/gt"
   [[ -d $DATA_DIR/udpnet_haze_asm_v2/depth_hazy ]] && ln -sfn "$DATA_DIR/udpnet_haze_asm_v2/depth_hazy" "$LROOT/depth_hazy"
+  [[ $VARIANT == dav2 ]] && make_dav2
   local need; need=$("$PYTHON" -c "import json,sys; print(json.load(open(sys.argv[1]))['summary']['train']['hazy_images'])" "$LROOT/splits.json")
   if [[ -f $VDIR/.complete && $(ls "$VDIR/train/hazy" | wc -l) == "$need" ]]; then say "layout: $VDIR exists ($need training images)"; return; fi
   say "layout: building $VDIR ($LINK_MODE)"
   rm -rf "$VDIR"
   "$PYTHON" "$REPO/ablation/link_layout.py" --haze "$HAZE" --root "$LROOT" --variants "$VARIANT" --mode "$LINK_MODE" | tee -a "$JOBLOG"
   touch "$VDIR/.complete"
+}
+
+make_dav2 () {   # DAv2-Large priors of every hazy image (ablation/make_dav2_depth.py, as for the local dav2 run)
+  local need have
+  need=$("$PYTHON" -c "import json,sys; S=json.load(open(sys.argv[1])); print(len({e['id'] for v in S['splits'].values() for e in v}) * len(S['betas']))" "$LROOT/splits.json")
+  have=$( { ls "$LROOT/depth_hazy/dav2" 2>/dev/null || true; } | wc -l)   # the folder does not exist yet on a fresh machine
+  if (( have < need )); then
+    export HF_HOME=${HF_HOME:-$WORK_ROOT/hf}; case $HF_HOME in /app/output*) export HF_HOME=$WORK_ROOT/hf;; esac
+    say "dav2 priors: Depth-Anything-V2-Large on $need hazy images -> $LROOT/depth_hazy/dav2 (have $have, ~30-40 min)"
+    timeout "${DAV2_TIMEOUT_MIN}m" "$PYTHON" "$REPO/ablation/make_dav2_depth.py" --haze "$DATA_DIR/haze_asm_v2" --root "$LROOT" \
+      > "$OUT_DIR/dav2_priors.log" 2>&1 || { tail -5 "$OUT_DIR/dav2_priors.log"; die "DAv2 prior generation failed (log $OUT_DIR/dav2_priors.log)"; }
+    grep -aE '^done' "$OUT_DIR/dav2_priors.log" | sed 's/^/  dav2 priors: /' | tee -a "$JOBLOG" || true
+  fi
+  have=$(ls "$LROOT/depth_hazy/dav2" | wc -l); (( have >= need )) || die "dav2 priors incomplete: $have / $need"
+  if [[ $DAV2_CHECK == 1 ]]; then
+    if ! "$PYTHON" "$REPO/ablation/check_dav2_priors.py" --check "$LROOT/depth_hazy/dav2" \
+         --ref "$REPO/ablation/dav2_reference_stats.json" | tee -a "$JOBLOG"; then
+      die "DAv2 priors differ from the local dav2 run -> not training on them (DAV2_CHECK=0 to override)"; fi
+  fi
 }
 
 udp_cd () {   # main.py / test.py write to ./results and ./logs -> point them into OUT_DIR

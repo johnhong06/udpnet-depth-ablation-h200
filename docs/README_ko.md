@@ -1,12 +1,13 @@
-# H200에서 gt·const 모델 돌리기
+# H200에서 gt·const·dav2 모델 돌리기
 
-depth prior ablation은 같은 UDPNet을 depth 입력만 바꿔 세 번 학습한다. 이 저장소로는 그중 **gt**와 **const**를
-항공드론 H200에서 돌린다. dav2는 연구실 데스크탑에서 같은 코드, 같은 설정으로 돌린다.
+depth prior ablation은 같은 UDPNet을 depth 입력만 바꿔 세 번 학습한다. 이 저장소로 세 모델 모두 항공드론 H200에서
+같은 코드, 같은 설정으로 돌린다.
 
 | 모델 | depth 입력 | 데이터 |
 |---|---|---|
 | gt | 실측 depth (1/거리, 0~255 정규화) | 드라이브에 올린 조각 |
 | const | 전부 128 | 같은 조각 (128 PNG는 스크립트가 만든다) |
+| dav2 | 안개 이미지에 Depth Anything V2 Large를 돌린 결과 | 같은 조각 (DAv2 depth는 스크립트가 H200에서 만든다) |
 
 신청, 이슈 작성, 컨테이너 경로 같은 서비스 사용법은 "Aerodrone H200 사용법" 페이지를 따른다.
 
@@ -51,8 +52,13 @@ GPU 할당량 `1`(16 GB 조각)은 쓰지 않는다. 이 학습은 batch 6에서
 | 3 | `bash run_gt.sh full` | 35시간 안팎 | 30분마다 나오는 `[hb]` 줄, 마지막 결과 표 |
 | 4 | `bash run_gt.sh smoke const` | 15분 안팎 | 2번과 같음 |
 | 5 | `bash run_gt.sh full const` | 35시간 안팎 | 3번과 같음 |
+| 6 | `bash run_gt.sh smoke dav2` | 1시간 안팎 | 2번과 같음 + `[dav2 check] OK` |
+| 7 | `bash run_gt.sh full dav2` | 36시간 안팎 | 3번과 같음 + `[dav2 check] OK` |
 
-3번과 5번은 할당량이 허락하면 동시에 요청해도 된다.
+3번, 5번, 7번은 할당량이 허락하면 동시에 요청해도 된다.
+
+dav2는 학습 전에 안개 이미지 34,972장 각각에 Depth Anything V2 Large를 돌려 depth를 만든다(작업마다 30~40분, 모델은
+Hugging Face에서 토큰 없이 받는다). 만든 depth는 로컬에서 만든 것의 통계(200장)와 대조하고, 다르면 학습하지 않고 멈춘다.
 
 ## 3. 결과 받기
 
@@ -62,6 +68,7 @@ GPU 할당량 `1`(16 GB 조각)은 쓰지 않는다. 이 학습은 batch 6에서
 |---|---|
 | gt | `/app/output/udpnet_gt/results_am_v2_lr1e-4_gt.zip` |
 | const | `/app/output/udpnet_const/results_am_v2_lr1e-4_const.zip` |
+| dav2 | `/app/output/udpnet_dav2/results_am_v2_lr1e-4_dav2.zip` |
 
 zip에는 결과 JSON(test, test_heldout), 학습·평가 로그, TensorBoard 기록, val 최고 checkpoint, `last.ckpt`가 들어 있다.
 
@@ -82,6 +89,7 @@ zip에는 결과 JSON(test, test_heldout), 학습·평가 로그, TensorBoard �
 |---|---|
 | gt | `am_v2_lr1e-4_gt_last.ckpt` |
 | const | `am_v2_lr1e-4_const_last.ckpt` |
+| dav2 | `am_v2_lr1e-4_dav2_last.ckpt` |
 
 화면 출력은 65,000자 제한 때문에 요약만 나온다. 전체 로그는 `/app/output/udpnet_<모델>/` 안의 파일에 있다.
 

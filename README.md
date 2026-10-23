@@ -10,7 +10,7 @@ UDPNet은 안개 이미지와 depth 지도를 함께 받아 안개를 걷어 내
 
 | 모델 | depth 입력 | 학습 장소 |
 |---|---|---|
-| dav2 | 안개 이미지에 Depth Anything V2 Large를 돌린 결과 (UDPNet 원래 방식) | 연구실 데스크탑 |
+| dav2 | 안개 이미지에 Depth Anything V2 Large를 돌린 결과 (UDPNet 원래 방식) | H200 |
 | gt | 실측 depth, dav2와 같은 형식 (1/거리, 0~255) | H200 |
 | const | 전부 128 (depth 정보 없음) | H200 |
 
@@ -56,7 +56,7 @@ const가 test 0.738 → 0.977, test_heldout 0.690 → 0.962.
 
 ## 실행 (H200)
 
-GPU 할당량 `7`로 요청한다. 명령은 `bash run_gt.sh check` → `smoke` → `full` 순서다. const는 `bash run_gt.sh full const`로
-돌린다. 요청서 작성법은 [docs/README_ko.md](docs/README_ko.md), 영어 상세 설명은 [docs/details_en.md](docs/details_en.md)에 있다.
+GPU 할당량 `7`로 요청한다. 명령은 `bash run_gt.sh check` → `smoke` → `full` 순서다. const와 dav2는 뒤에 이름을 붙인다
+(`bash run_gt.sh full const`, `bash run_gt.sh full dav2`). dav2는 DAv2 depth를 H200에서 직접 만들어서 쓴다. 요청서 작성법은 [docs/README_ko.md](docs/README_ko.md), 영어 상세 설명은 [docs/details_en.md](docs/details_en.md)에 있다.
 
 UDPNet 원본: Zuo et al., arXiv 2601.06909 (Apache-2.0). 수정 내역은 [NOTICE.md](NOTICE.md).

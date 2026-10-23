@@ -73,7 +73,8 @@ training (`Final.ckpt`) is not repeated. Modes: `check | data | smoke | full | t
 | `DATA_DIR` | – | an unpacked `udpnet_gt_data` folder (skips the search) |
 | `WORK_ROOT` | `/app/scratch/udpnet_work`, else `./work` | unpacked data and the training folder |
 | `OUT_DIR` | `/app/output/udpnet_<variant>`, else `./outputs` | checkpoints, TensorBoard, logs, eval JSON, results zip |
-| `VARIANT` (or 2nd argument) | `gt` | `gt` / `const` / `dav2` (`dav2` also needs `depth_hazy/dav2`, not in the gt pack) |
+| `VARIANT` (or 2nd argument) | `gt` | `gt` / `const` / `dav2` (`dav2` computes its DAv2 priors on the machine, see below) |
+| `DAV2_TIMEOUT_MIN`, `DAV2_CHECK` | `240`, `1` | dav2: time limit for the priors; stop if they differ from the reference stats |
 | `TIME_LIMIT_H`, `EVAL_RESERVE_MIN` | `0` (none), `45` | optional: stop training in time for eval + zip |
 | `STALL_MIN`, `MAX_RETRY`, `HB_MIN` | `30`, `10`, `30` | watchdog, restarts, status-line interval |
 | `RESUME_CKPT` | – | checkpoint to resume from (default: `*/am_v2_lr1e-4_gt_last.ckpt` under `DATA_SRC`) |
@@ -104,6 +105,13 @@ Not in git. `udpnet_gt_data` (56.9 GB, PNG images) as an uncompressed tar split 
 How the data was made (for reference; not needed to run): AerialMetric frames → haze_asm_v2 haze generator
 (β = 1, 2.5, 6, 15 /km) → `ablation/make_layout.py` (splits + GT depth prior, with an alignment check of every frame
 against the saved clean image) → `ablation/make_dav2_depth.py` (DAv2 prior, `dav2` only).
+
+**dav2 on another machine**: `bash run_gt.sh full dav2` installs `transformers==5.16.1`, downloads
+`depth-anything/Depth-Anything-V2-Large-hf` (public, no token) and runs `ablation/make_dav2_depth.py` on all 34,972 hazy
+images before training (~30–40 min, resumable). `ablation/check_dav2_priors.py` then compares 200 of them with
+`ablation/dav2_reference_stats.json` (mean, percentiles and an 8×8 grid of block means of the priors used for the local
+dav2 run); a mean grid difference above 2 levels on any image stops the job before training. Regenerated on the
+reference machine, the priors are bit-identical to the local ones.
 
 ## Recipe (identical for all three variants)
 
