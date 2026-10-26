@@ -37,22 +37,25 @@ test_heldout은 test의 일부다. 두 세트는 시점 구성도 다르다. 학
 | 모델 | test PSNR | test gain | test_heldout PSNR | test_heldout gain | val 최고 PSNR (epoch) |
 |---|---|---|---|---|---|
 | 안개 입력 | 17.12 | – | 15.18 | – | – |
-| dav2 | | | | | |
+| dav2 | 34.07 | +16.95 | 28.73 | +13.56 | 41.76 (59) |
 | gt | 34.65 | +17.53 | 28.93 | +13.75 | 41.89 (56) |
 | const | 32.92 | +15.79 | 27.57 | +12.40 | 41.49 (65) |
 
 단위는 dB. SSIM(안개 입력 → 출력)은 gt가 test 0.738 → 0.984, test_heldout 0.690 → 0.972,
-const가 test 0.738 → 0.977, test_heldout 0.690 → 0.962.
+dav2가 test 0.738 → 0.980, test_heldout 0.690 → 0.968, const가 test 0.738 → 0.977, test_heldout 0.690 → 0.962.
 
 ## 비교
 
 | 비교 | 의미 | 예상 | test | test_heldout |
 |---|---|---|---|---|
-| dav2 − const | DAv2 depth가 주는 이득 | 양수, 셋 중 가장 작음 | | |
+| dav2 − const | DAv2 depth가 주는 이득 | 양수, 셋 중 가장 작음 | +1.16 | +1.16 |
 | gt − const | 정확한 depth가 주는 이득 | 양수, 가장 큼 | +1.74 | +1.35 |
-| gt − dav2 | DAv2 오차로 잃는 성능 | 양수 | | |
+| gt − dav2 | DAv2 오차로 잃는 성능 | 양수 | +0.58 | +0.19 |
 
 예상 순서는 gt > dav2 > const다. 안개를 실측 depth로 만들었으니 gt는 실제보다 유리한 상한선으로 읽는다.
+
+결과도 gt > dav2 > const 순서다. 정확한 depth가 주는 이득(gt − const) 중 DAv2가 test에서 67%, test_heldout에서 86%를
+얻었다. 모델마다 한 번씩만 학습했으므로 0.2 dB 안팎의 차이는 학습을 반복했을 때의 변동 안에 있을 수 있다.
 
 ## 실행 (H200)
 
